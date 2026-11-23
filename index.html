@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entrenador de ajedrez</title>
+<script src="chess.js"></script>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#2f6f9f">
+<script src="db.js"></script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f3f5f7;--panel:#fff;--ink:#1b2733;--muted:#5b6b7a;--line:#d5dde4;--sq-l:#d9e2e9;--sq-d:#6f8da5;--sel:#f2c14e;--dot:rgba(27,39,51,.35);--last:rgba(242,193,78,.45);--check:#d9534f;--wp:#fff;--bp:#14202b;--accent:#2f6f9f;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1720;--panel:#17222d;--ink:#e7eef4;--muted:#93a4b3;--line:#2a3947;--sq-l:#9fb4c4;--sq-d:#4a6579;--dot:rgba(10,15,20,.45);--accent:#6fb1e0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1720;--panel:#17222d;--ink:#e7eef4;--muted:#93a4b3;--line:#2a3947;--sq-l:#9fb4c4;--sq-d:#4a6579;--dot:rgba(10,15,20,.45);--accent:#6fb1e0;color-scheme:dark}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Times New Roman",serif}
+main{max-width:520px;margin:0 auto;padding:14px 14px 28px}
+h1{font-size:1.35rem;margin:4px 0 8px}
+#status{font-family:system-ui,sans-serif;font-weight:600;min-height:1.5em;margin:0 0 8px}
+#board{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));width:100%;aspect-ratio:1;border:2px solid var(--ink);border-radius:4px;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.sq{position:relative;min-width:0;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:clamp(26px,9.2vw,50px);line-height:1}
+.sq.l{background:var(--sq-l)}.sq.d{background:var(--sq-d)}
+.sq.last::before{content:"";position:absolute;inset:0;background:var(--last)}
+.sq.sel{box-shadow:inset 0 0 0 4px var(--sel)}.sq.chk{box-shadow:inset 0 0 0 4px var(--check)}
+.sq.mv::after{content:"";position:absolute;width:28%;height:28%;border-radius:50%;background:var(--dot)}
+.sq.cap::after{content:"";position:absolute;inset:3px;border-radius:50%;border:4px solid rgba(217,83,79,.9);z-index:2}
+.pc{position:relative;z-index:1;font-family:"Segoe UI Symbol","Noto Sans Symbols 2","Apple Symbols",serif}
+.pc.w{color:var(--wp);text-shadow:0 0 2px #000,0 0 2px #000,0 1px 1px #000}.pc.b{color:var(--bp);text-shadow:0 0 1px rgba(255,255,255,.5)}
+.co{position:absolute;z-index:2;font:600 10px system-ui,sans-serif;opacity:.7;pointer-events:none}.co.r{top:2px;left:3px}.co.f{bottom:2px;right:3px}
+.sq.l .co{color:var(--sq-d)}.sq.d .co{color:var(--sq-l)}
+#banner{font-family:system-ui,sans-serif;font-size:.95rem;min-height:2.6em;margin:8px 0 0;padding:8px 10px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+button,select{font:600 .95rem system-ui,sans-serif;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+button.p{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.5}
+button:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--sel);outline-offset:2px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px}
+h2{font-size:1rem;margin:0 0 6px}
+#moves{position:relative;font-family:system-ui,sans-serif;font-size:.95rem;display:grid;grid-template-columns:2.2em 1fr 1fr;gap:2px 6px;max-height:190px;overflow-y:auto}
+#moves .n{color:var(--muted);padding:4px 0}#moves .empty{grid-column:1/-1;color:var(--muted)}
+.mc{padding:4px 6px;border-radius:6px;cursor:pointer}.mc.cur{background:var(--accent);color:#fff}
+.sym{margin-left:4px;font-weight:800}.mc.cur .sym{color:#fff!important}
+.t-best{color:#2e9e5b}.t-exc{color:#4aa36c}.t-good{color:#7a8f55}.t-inac{color:#c99a1c}.t-err{color:#e07b22}.t-blun{color:#d9534f}.t-bril{color:#1fb5c4}
+.t{font-weight:700}
+#eng-st,#sum{font:.9rem system-ui,sans-serif;color:var(--muted);margin:4px 0}
+.eng{font:.92rem system-ui,sans-serif;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+textarea{width:100%;min-height:90px;font:13px/1.4 ui-monospace,Menlo,monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;resize:vertical}
+#msg{font-family:system-ui,sans-serif;font-size:.85rem;color:var(--check);min-height:1.2em;margin:6px 0 0}
+.bdg{position:absolute;top:2px;right:2px;z-index:3;min-width:19px;height:19px;padding:0 4px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:800 11px/1 system-ui,sans-serif;color:#fff!important;box-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none}
+.bdg.t-best{background:#2e9e5b}.bdg.t-exc{background:#4aa36c}.bdg.t-good{background:#7a8f55}.bdg.t-inac{background:#c99a1c}.bdg.t-err{background:#e07b22}.bdg.t-blun{background:#d9534f}.bdg.t-bril{background:#1fb5c4}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 10px}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+[hidden]{display:none!important}
+#rv-info{font:.95rem/1.45 system-ui,sans-serif;margin:10px 0 0}
+#rv-stats{font:.88rem system-ui,sans-serif;color:var(--muted);margin:6px 0 0}
+#bw{position:relative}
+#ar{position:absolute;inset:2px;width:calc(100% - 4px);height:calc(100% - 4px);pointer-events:none;z-index:5}
+input[type=text],input[type=password]{flex:1;min-width:0;font:.95rem system-ui,sans-serif;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+#cc-list{font:.9rem system-ui,sans-serif;color:var(--muted)}
+.cc{display:block;width:100%;text-align:left;font-weight:500;margin-top:6px;font-size:.88rem}
+.hp{font:.95rem/1.45 system-ui,sans-serif;color:var(--muted);margin:10px 0}
+.hc{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;font:.92rem/1.5 system-ui,sans-serif}
+.hc h2{font:700 1rem Georgia,serif;margin:0 0 8px}
+.big{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.big b{display:block;font-size:1.45rem}.big span{color:var(--muted);font-size:.8rem}
+.brow{display:grid;grid-template-columns:7.2em 1fr 2.2em;gap:8px;align-items:center;margin:5px 0}
+.brow span:first-child,.brow span:last-child{color:var(--ink)}.brow span:last-child{text-align:right}
+.bar{height:10px;border-radius:5px;background:currentColor;min-width:3px;display:block}
+.tabs button{padding:10px 2px;font-size:.78rem}
+#chat{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:52vh;overflow-y:auto}
+.msg{padding:9px 12px;border-radius:12px;font:.93rem/1.45 system-ui,sans-serif;max-width:92%;word-wrap:break-word}
+.msg.u{align-self:flex-end;background:var(--accent);color:#fff}
+.msg.a{align-self:flex-start;background:var(--panel);border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Centro de entrenamiento</h1>
+  <div class="tabs"><button id="tab-b" class="on">Tablero</button><button id="tab-r">Revancha <span id="rv-n"></span></button><button id="tab-h">Historial</button><button id="tab-c">Entrenador</button></div>
+  <p id="status" aria-live="polite"></p>
+  <div id="bw"><div id="board" role="grid" aria-label="Tablero de ajedrez"></div><svg id="ar" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+  <div id="banner" aria-live="polite"></div>
+  <div id="v-hist" hidden></div>
+  <div id="v-coach" hidden>
+    <div class="hc"><h2>Conexión con Gemini</h2>
+      <div class="eng"><input type="password" id="k-in" placeholder="Pega aquí tu clave de Gemini" autocomplete="off"><button id="k-save" class="p">Guardar</button></div>
+      <div class="eng"><input type="text" id="k-name" placeholder="Nombre de tu entrenador (opcional)" autocapitalize="words"></div>
+      <p class="hp" id="k-st" style="margin:6px 0 0"></p>
+      <div class="row" style="margin:6px 0 0"><button id="k-del">Quitar clave</button></div></div>
+    <div id="chat"></div>
+    <div class="eng"><input type="text" id="c-in" placeholder="Pregúntale a tu entrenador…"><button id="c-send" class="p">Enviar</button></div>
+    <div class="row"><button id="c-day">Mensaje del día</button><button id="c-pos">Explicar el tablero</button><button id="c-clear">Borrar chat</button></div>
+  </div>
+  <div id="v-rv" hidden>
+    <p id="rv-info"></p>
+    <div class="row"><button id="rv-sol">Ver solución</button><button id="rv-next" class="p" hidden>Siguiente</button></div>
+    <p id="rv-stats"></p>
+  </div>
+  <div id="v-board">
+  <div class="nav">
+    <button id="first" aria-label="Al inicio">⏮</button><button id="prev" aria-label="Jugada anterior">◀</button>
+    <button id="next" aria-label="Jugada siguiente">▶</button><button id="lastb" aria-label="Al final">⏭</button>
+  </div>
+  <div class="row"><button id="flip">Girar tablero</button><button id="new" class="p">Partida nueva</button></div>
+  <section><h2>Jugadas</h2><div id="moves"></div></section>
+  <section>
+    <h2>Stockfish</h2>
+    <p id="eng-st">Cargando motor…</p>
+    <div class="row" style="margin:4px 0"><button id="retry" hidden>Reintentar motor</button></div>
+    <div class="eng"><label><input type="checkbox" id="vs"> Jugar contra el motor (tú, blancas)</label>
+      <select id="lvl"><option value="0">Muy fácil</option><option value="5">Fácil</option><option value="10" selected>Medio</option><option value="15">Difícil</option><option value="20">Máximo</option></select></div>
+    <div class="eng"><label><input type="checkbox" id="live"> Análisis en vivo (valora cada jugada y dibuja la sugerencia en verde)</label></div>
+    <div class="eng"><label><input type="checkbox" id="reach"> Mostrar alcance y amenazas (al elegir destino, toca dos veces para mover)</label></div>
+    <div class="eng"><label><input type="checkbox" id="snd" checked> Sonidos</label></div>
+    <div class="eng"><label>Yo jugué con <select id="me"><option value="w">Blancas</option><option value="b">Negras</option></select></label></div>
+    <div class="row" style="margin:8px 0"><button id="ana-btn" class="p">Analizar partida</button></div>
+    <p id="sum"></p>
+  </section>
+  <section>
+    <h2>Importar de Chess.com</h2>
+    <div class="eng"><input type="text" id="cc-user" placeholder="Tu usuario de Chess.com" autocapitalize="off" autocorrect="off" spellcheck="false"><button id="cc-go" class="p">Traer partidas</button></div>
+    <div id="cc-list"></div>
+  </section>
+  <section>
+    <h2>Cargar partida (PGN)</h2>
+    <textarea id="pgn" placeholder="Pega aquí el PGN de tu partida" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
+    <div class="row" style="margin-bottom:0"><button id="load">Cargar PGN</button><button id="copy">Copiar PGN</button></div>
+    <p id="msg"></p>
+  </section>
+</div>
+<p class="hp" style="text-align:center;font-size:.75rem">Versión 11</p>
+</main>
+<script>
+(function(){
+var START=new Chess().fen(),evc={},mode="b",rv=null,rvList=[],RI=null,prevSq=null,prevRI=null,AC=null,curMeta=null,liveTok=0,chain=Promise.resolve(),moves=[],fens=[START],ana=[],ply=0,game=new Chess(),sel=null,flipped=false,busy=false,ready=false,eng=null,pending=null,lastErr="";
+var G={p:"♟",n:"♞",b:"♝",r:"♜",q:"♛",k:"♚"},VAL={p:1,n:3,b:3,r:5,q:9,k:0};
+var LAB={best:["Mejor","t-best","★"],exc:["Excelente","t-exc","!"],good:["Buena","t-good","✓"],book:["Apertura","t-good","📖"],inac:["Imprecisión","t-inac","?!"],err:["Error","t-err","?"],blun:["Grave error","t-blun","??"],bril:["Brillante","t-bril","!!"]};
+var $=function(id){return document.getElementById(id)},boardEl=$("board");
+function sqName(r,c){return "abcdefgh"[c]+(8-r)}
+function sync(){game=new Chess(fens[ply]);sel=null;prevSq=null;prevRI=null;render();live()}
+
+function render(){
+  if(!sel){prevSq=null;prevRI=null}
+  var b=game.board(),targets={},html="",last=mode==="b"?(ply>0?moves[ply-1]:null):((rv&&rv.last)||null),kingSq=null;
+  if(sel)game.moves({square:sel,verbose:true}).forEach(function(m){targets[m.to]=1});
+  if(game.in_check())for(var r=0;r<8;r++)for(var c=0;c<8;c++){var p=b[r][c];if(p&&p.type==="k"&&p.color===game.turn())kingSq=sqName(r,c)}
+  for(var i=0;i<8;i++)for(var j=0;j<8;j++){
+    var r2=flipped?7-i:i,c2=flipped?7-j:j,n=sqName(r2,c2),p2=b[r2][c2],cl="sq "+((r2+c2)%2===0?"l":"d");
+    if(last&&(last.from===n||last.to===n))cl+=" last";
+    if(sel===n||prevSq===n)cl+=" sel";if(kingSq===n)cl+=" chk";if(targets[n])cl+=p2?" cap":" mv";
+    html+='<div class="'+cl+'" data-sq="'+n+'" role="gridcell">';
+    if(j===0)html+='<span class="co r">'+(8-r2)+'</span>';
+    if(i===7)html+='<span class="co f">'+"abcdefgh"[c2]+'</span>';
+    if(p2)html+='<span class="pc '+p2.color+'">'+G[p2.type]+'</span>';
+    if(mode==="b"&&last&&last.to===n&&ana[ply-1])html+='<span class="bdg '+LAB[ana[ply-1].k][1]+'">'+LAB[ana[ply-1].k][2]+'</span>';
+    html+='</div>';
+  }
+  boardEl.innerHTML=html;status();RI=(mode==="b"&&$("reach").checked)?(prevRI||(ply>0?reachInfo():null)):null;if(mode==="b"){moveList();banner()}drawArrows();
+  $("first").disabled=$("prev").disabled=ply===0;$("next").disabled=$("lastb").disabled=ply===moves.length;
+}
+function status(){
+  var s;
+  if(game.in_checkmate())s="Jaque mate. Ganan las "+(game.turn()==="w"?"negras":"blancas")+".";
+  else if(game.in_stalemate())s="Tablas por ahogado.";
+  else if(game.insufficient_material())s="Tablas por material insuficiente.";
+  else if(game.in_draw())s="Tablas.";
+  else s="Juegan las "+(game.turn()==="w"?"blancas":"negras")+(game.in_check()?" (jaque)":"")+".";
+  $("status").textContent=s;
+}
+function moveList(){
+  var out="";
+  if(!moves.length)out='<span class="empty">Aún no hay jugadas.</span>';
+  function cell(i){
+    if(!moves[i])return "<span></span>";
+    var a=ana[i],sy=a?'<b class="sym '+LAB[a.k][1]+'">'+LAB[a.k][2]+'</b>':"";
+    return '<span class="mc'+(ply===i+1?" cur":"")+'" data-p="'+(i+1)+'">'+moves[i].san+sy+'</span>';
+  }
+  for(var i=0;i<moves.length;i+=2)out+='<span class="n">'+(i/2+1)+'.</span>'+cell(i)+cell(i+1);
+  var el=$("moves");el.innerHTML=out;
+  var cur=el.querySelector(".cur");if(cur)el.scrollTop=cur.offsetTop-el.clientHeight/2;
+}
+function banner(){
+  var t;
+  if(ply===0)t="Posición inicial.";
+  else{
+    var m=moves[ply-1],a=ana[ply-1],num=Math.ceil(ply/2)+(m.color==="w"?". ":"… ");
+    t="<b>"+num+m.san+"</b> — ";
+    t+=a?'<span class="t '+LAB[a.k][1]+'">'+LAB[a.k][0]+"</span>"+a.hint:($("live").checked?"analizando…":"sin analizar todavía.");
+  }
+  var e=$("live").checked&&evc[fens[ply]];
+  if(e)t+="<br>Evaluación "+evTxt(e)+(e.best&&!game.game_over()?" · Sugerencia: <b>"+sugSan(fens[ply],e)+"</b>":"");
+  if(RI)t+="<br>"+RI.text;
+  $("banner").innerHTML=t;
+}
+$("moves").addEventListener("click",function(e){var c=e.target.closest(".mc");if(c){ply=+c.dataset.p;sync()}});
+$("first").onclick=function(){ply=0;sync()};
+$("prev").onclick=function(){if(ply>0){ply--;sync()}};
+$("next").onclick=function(){if(ply<moves.length){ply++;snd(moves[ply-1]);sync()}};
+$("lastb").onclick=function(){ply=moves.length;sync()};
+$("flip").onclick=function(){flipped=!flipped;render()};
+$("new").onclick=function(){if(busy)return;curMeta=null;moves=[];fens=[START];ana=[];ply=0;$("sum").textContent="";$("msg").textContent="";sync()};
+
+function push(mv){
+  curMeta=null;if(ply<moves.length)$("sum").textContent="";
+  moves=moves.slice(0,ply);fens=fens.slice(0,ply+1);ana=ana.slice(0,ply);
+  moves.push(mv);fens.push(game.fen());ply=moves.length;snd(mv);sync();
+}
+boardEl.addEventListener("click",function(e){
+  var el=e.target.closest(".sq");
+  if(mode==="r"){if(el)rvClick(el.dataset.sq);return}
+  if(!el||busy||game.game_over()||($("vs").checked&&game.turn()!=="w"))return;
+  var n=el.dataset.sq,piece=game.get(n);
+  if(sel){
+    if(sel===n){sel=null;return render()}
+    if($("reach").checked&&prevSq!==n){
+      var cand=game.moves({square:sel,verbose:true}).filter(function(x){return x.to===n})[0];
+      if(cand){
+        var g2=new Chess(game.fen()),pm=g2.move({from:sel,to:n,promotion:"q"});
+        prevSq=n;prevRI=reachFor(pm,g2.fen(),g2);prevRI.text="Vista previa: "+prevRI.text+" Toca de nuevo para jugar.";
+        return render();
+      }
+    }
+    var mv=game.move({from:sel,to:n,promotion:"q"});
+    if(mv){prevSq=null;prevRI=null;push(mv);return engineTurn()}
+  }
+  sel=(piece&&piece.color===game.turn())?n:null;prevSq=null;prevRI=null;render();
+});
+
+/* ---- PGN tolerante (móvil: saltos de línea raros, comentarios, relojes) ---- */
+function parsePgn(t){
+  t=t.replace(/\r/g,"").replace(/…/g,"...").replace(/[“”]/g,'"');
+  var fm=t.match(/\[FEN\s+"([^"]+)"\]/i),st=fm?fm[1]:START;
+  t=t.replace(/\[[^\]]*\]/g," ").replace(/\{[^}]*\}/g," ").replace(/;[^\n]*/g," ");
+  while(/\([^()]*\)/.test(t))t=t.replace(/\([^()]*\)/g," ");
+  var toks=t.split(/\s+/).map(function(x){return x.replace(/^\d+\.+/,"").replace(/[!?]+$/,"").replace(/^\$\d+$/,"")}).filter(function(x){return x&&!/^(1-0|0-1|1\/2-1\/2|\*)$/.test(x)});
+  var g=new Chess(st),ms=[],fs=[g.fen()],bad=null;
+  for(var i=0;i<toks.length;i++){var m=g.move(toks[i],{sloppy:true});if(!m){bad=toks[i];break}ms.push(m);fs.push(g.fen())}
+  return {ms:ms,fs:fs,bad:bad};
+}
+$("load").onclick=function(){
+  if(busy)return;
+  var txt=$("pgn").value.trim();
+  if(!txt){$("msg").textContent="Pega primero un PGN.";return}
+  var r;try{r=parsePgn(txt)}catch(e){r={ms:[]}}
+  if(!r.ms.length){$("msg").textContent="No se encontró ninguna jugada válida en ese texto.";return}
+  curMeta=null;moves=r.ms;fens=r.fs;ana=[];ply=0;$("sum").textContent="";
+  $("msg").textContent=r.bad?"Se cargaron "+r.ms.length+" jugadas; se detuvo en «"+r.bad+"».":"";
+  sync();
+};
+$("copy").onclick=function(){
+  var g=new Chess(fens[0]);moves.forEach(function(m){g.move({from:m.from,to:m.to,promotion:m.promotion})});
+  var t=g.pgn();
+  try{navigator.clipboard.writeText(t).then(function(){$("msg").style.color="var(--accent)";$("msg").textContent="PGN copiado."},function(){$("pgn").value=t})}catch(e){$("pgn").value=t}
+};
+
+/* ---- Stockfish ---- */
+var SRC=["stockfish.wasm.js","stockfish.js","https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js","https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js"];
+function setEng(t){$("eng-st").textContent=t}
+function startEngine(i){
+  if(i>=SRC.length){setEng("No se pudo iniciar el motor ("+lastErr+"). La primera vez necesita internet.");$("retry").hidden=false;return}
+  $("retry").hidden=true;setEng("Cargando motor…");
+  var w,timer,ok=false;
+  var s=SRC[i];try{w=new Worker(s.indexOf("http")===0?URL.createObjectURL(new Blob(['importScripts("'+s+'")'],{type:"application/javascript"})):s)}catch(e){lastErr=String(e&&e.message||e);return startEngine(i+1)}
+  function next(msg){if(ok)return;clearTimeout(timer);try{w.terminate()}catch(e){}lastErr=msg;startEngine(i+1)}
+  timer=setTimeout(function(){next("tiempo agotado")},15000);
+  w.onerror=function(e){next((e&&e.message)||"error de carga")};
+  w.onmessage=function(e){
+    var l=typeof e.data==="string"?e.data:"";
+    if(l==="uciok")w.postMessage("isready");
+    else if(l==="readyok"&&!ok){ok=true;clearTimeout(timer);eng=w;ready=true;setEng("Motor listo (Stockfish 10).")}
+    else if(ok&&pending){
+      if(l.indexOf("info")===0&&!/bound/.test(l)){var m=l.match(/score (cp|mate) (-?\d+)/);if(m)pending.s={t:m[1],v:+m[2]}}
+      else if(l.indexOf("bestmove")===0){var p=pending;pending=null;p.res({s:p.s,best:l.split(" ")[1]})}
+    }
+  };
+  w.postMessage("uci");
+}
+$("retry").onclick=function(){startEngine(0)};
+function ask(fen,cmd,skill){
+  var p=chain.then(function(){return new Promise(function(res){
+    pending={res:res,s:null};
+    eng.postMessage("setoption name Skill Level value "+(skill===undefined?20:skill));
+    eng.postMessage("position fen "+fen);eng.postMessage(cmd);
+  })});
+  chain=p.catch(function(){});return p;
+}
+function evOf(f){
+  var g=new Chess(f);
+  if(g.game_over())return Promise.resolve({cp:g.in_checkmate()?(f.split(" ")[1]==="w"?-10000:10000):0,best:null});
+  return ask(f,"go depth 14 movetime 700").then(function(r){return {cp:whiteCp(f,r.s),best:r.best}});
+}
+function evTxt(e){var c=e.cp;if(Math.abs(c)>9000)return c>0?"mate a favor de las blancas":"mate a favor de las negras";return (c>=0?"+":"")+(c/100).toFixed(2)}
+function sugSan(f,e){var m=new Chess(f).move({from:e.best.slice(0,2),to:e.best.slice(2,4),promotion:e.best[4]});return m?m.san:e.best}
+function classify(i,e0,e1){
+  var m=moves[i],w=m.color==="w",b=wp(e0.cp),a=wp(e1.cp);
+  if(!w){b=1-b;a=1-a}
+  var loss=Math.max(0,b-a),isBest=e0.best&&e0.best.slice(0,4)===m.from+m.to;
+  var k=loss<=0.02?(isBest?"best":"exc"):loss<=0.05?"good":loss<=0.10?"inac":loss<=0.20?"err":"blun";
+  if((k==="best"||k==="exc")&&b<0.85&&a>=0.4&&isSacrifice(fens[i+1],m))k="bril";
+  if(i<10&&loss<=0.15&&k!=="best"&&k!=="exc")k="book";
+  var hint="",bsan=null;
+  if((k==="inac"||k==="err"||k==="blun")&&e0.best){
+    var bm=new Chess(fens[i]).move({from:e0.best.slice(0,2),to:e0.best.slice(2,4),promotion:e0.best[4]});
+    if(bm){bsan=bm.san;hint=" · Mejor era <b>"+bm.san+"</b>"}
+  }
+  return {k:k,hint:hint,best:bsan,bu:e0.best};
+}
+/* Análisis en vivo: evalúa la posición actual y valora al instante la jugada que llevó a ella */
+async function live(){
+  var tok=++liveTok;
+  if(mode!=="b"||!$("live").checked||!ready||busy)return;
+  if(pending)eng.postMessage("stop");
+  var need=ply>0?[ply-1,ply]:[ply];
+  banner();
+  for(var k=0;k<need.length;k++){
+    var f=fens[need[k]];
+    if(evc[f])continue;
+    var e=await evOf(f);
+    if(tok!==liveTok)return;
+    evc[f]=e;
+  }
+  if(tok!==liveTok)return;
+  if(ply>0&&!ana[ply-1])ana[ply-1]=classify(ply-1,evc[fens[ply-1]],evc[fens[ply]]);
+  render();
+}
+$("live").onchange=function(){liveTok++;if(!$("live").checked){if(pending)eng.postMessage("stop");banner()}else live()};
+function whiteCp(fen,s){if(!s)return 0;var v=s.t==="mate"?(s.v>0?10000-s.v:-10000-s.v):s.v;return fen.split(" ")[1]==="w"?v:-v}
+function wp(cp){return 1/(1+Math.exp(-0.00368208*cp))}
+
+async function engineTurn(){
+  if(!$("vs").checked||!ready||game.game_over()||game.turn()!=="b")return;
+  busy=true;setEng("El motor está pensando…");
+  liveTok++;if(pending)eng.postMessage("stop");
+  var r=await ask(game.fen(),"go movetime 500",$("lvl").value);
+  var mv=game.move({from:r.best.slice(0,2),to:r.best.slice(2,4),promotion:r.best[4]||"q"});
+  busy=false;setEng("Motor listo (Stockfish 10).");
+  if(mv)push(mv);else render();
+}
+function isSacrifice(fenAfter,m){
+  var pv=VAL[m.piece],gain=m.captured?VAL[m.captured]:0;
+  if(pv<3||gain>=pv)return false;
+  var caps=new Chess(fenAfter).moves({verbose:true}).filter(function(x){return x.to===m.to&&x.captured});
+  if(!caps.length)return false;
+  var worst=0;
+  caps.forEach(function(c){
+    var g2=new Chess(fenAfter);g2.move(c);
+    var rec=g2.moves({verbose:true}).some(function(x){return x.to===m.to&&x.captured})?VAL[c.piece]:0;
+    worst=Math.min(worst,gain-pv+rec);
+  });
+  return worst<=-2;
+}
+$("ana-btn").onclick=async function(){
+  if(busy)return;
+  if(!ready){$("sum").textContent="El motor aún no está listo. Estado: "+$("eng-st").textContent;return}
+  if(!moves.length){$("sum").textContent="Juega o carga una partida primero.";return}
+  liveTok++;if(pending)eng.postMessage("stop");
+  busy=true;var n=fens.length;
+  for(var i=0;i<n;i++){
+    $("sum").textContent="Analizando posición "+(i+1)+" de "+n+"…";
+    if(!evc[fens[i]])evc[fens[i]]=await evOf(fens[i]);
+  }
+  var cnt={};ana=[];
+  moves.forEach(function(m,i){var a=classify(i,evc[fens[i]],evc[fens[i+1]]);cnt[a.k]=(cnt[a.k]||0)+1;ana.push(a)});
+  $("sum").textContent=Object.keys(LAB).filter(function(k){return cnt[k]}).map(function(k){return cnt[k]+" "+LAB[k][0].toLowerCase()}).join(", ")+".";
+  busy=false;render();saveAnalyzed();live();
+};
+function saveAnalyzed(){
+  var me=$("me").value,items=[];
+  moves.forEach(function(m,i){
+    var a=ana[i];
+    if(m.color===me&&a&&(a.k==="err"||a.k==="blun")&&a.best)items.push({fen:fens[i],played:m.san,best:a.best,bestUci:a.bu,kind:a.k,ply:i+1});
+  });
+  DB.saveGame({id:curMeta?"cc:"+curMeta.url:undefined,startFen:fens[0],sans:moves.map(function(m){return m.san}),ana:ana,me:me,source:curMeta?"chess.com":"manual",meta:curMeta})
+    .then(function(g){items.forEach(function(x){x.gameId=g.id});return DB.addRevancha(items)})
+    .then(function(){$("sum").textContent+=" Guardada. "+items.length+" posición(es) para Revancha.";rvCount();ccShow()})
+    .catch(function(e){$("sum").textContent+=" ⚠ No se pudo guardar en el historial: "+(e&&e.message||e)});
+}
+/* ---- Sonidos (sintetizados, funcionan sin internet) ---- */
+function tone(f,t0,d,type,vol){
+  var o=AC.createOscillator(),g=AC.createGain();o.type=type||"sine";o.frequency.value=f;
+  g.gain.setValueAtTime(vol,t0);g.gain.exponentialRampToValueAtTime(.0001,t0+d);
+  o.connect(g);g.connect(AC.destination);o.start(t0);o.stop(t0+d+.02);
+}
+function snd(m){
+  if(!m||!$("snd").checked)return;
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume();
+    var t=AC.currentTime,s=m.san||"";
+    if(s.indexOf("#")>=0)[392,330,262,196].forEach(function(f,i){tone(f,t+i*.14,.4,"triangle",.25)});
+    else if(m.promotion)[523,659,784,1047].forEach(function(f,i){tone(f,t+i*.07,.22,"triangle",.2)});
+    else if(s.indexOf("+")>=0){tone(880,t,.12,"square",.1);tone(880,t+.15,.18,"square",.1)}
+    else if(m.captured){tone(150,t,.14,"sawtooth",.22);tone(95,t+.02,.16,"square",.12)}
+    else if(m.flags&&/[kq]/.test(m.flags)){tone(330,t,.08,"triangle",.2);tone(330,t+.11,.08,"triangle",.2)}
+    else tone(520,t,.07,"triangle",.18);
+  }catch(e){}
+}
+
+function unlockAudio(){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume()}catch(e){}}
+document.addEventListener("pointerdown",unlockAudio);
+$("snd").onchange=function(){if(this.checked)snd({san:"",flags:"n"})};
+
+/* ---- Flechas, alcance y amenazas ---- */
+var NM={p:"peón",n:"caballo",b:"alfil",r:"torre",q:"dama",k:"rey"};
+function xy(n){var c="abcdefgh".indexOf(n[0]),r=8-(+n[1]);return [(flipped?7-c:c)+.5,(flipped?7-r:r)+.5]}
+function arrow(a,b,col,w,op){
+  var p=xy(a),q=xy(b),dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy);if(!L)return "";
+  var ux=dx/L,uy=dy/L,hl=.3,hw=.2,ex=q[0]-ux*hl,ey=q[1]-uy*hl,sx=p[0]+ux*.25,sy=p[1]+uy*.25;
+  return '<g opacity="'+op+'"><line x1="'+sx+'" y1="'+sy+'" x2="'+ex+'" y2="'+ey+'" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round"/><polygon fill="'+col+'" points="'+q[0]+","+q[1]+" "+(ex-uy*hw)+","+(ey+ux*hw)+" "+(ex+uy*hw)+","+(ey-ux*hw)+'"/></g>';
+}
+function reachInfo(){return reachFor(moves[ply-1],fens[ply],game)}
+function reachFor(m,fen,gg){
+  var f=fen.split(" ");f[1]=m.color;f[3]="-";
+  var pt=m.promotion||m.piece,reach=[],hits=[],nm=NM[pt];
+  if(pt==="p"){
+    var dir=m.color==="w"?1:-1,fc="abcdefgh".indexOf(m.to[0]),rk=+m.to[1]+dir;
+    [-1,1].forEach(function(d){var f2=fc+d;if(f2<0||f2>7||rk<1||rk>8)return;var sq="abcdefgh"[f2]+rk,pc=gg.get(sq);if(!pc)reach.push(sq);else if(pc.color!==m.color)hits.push({to:sq,p:pc.type})});
+  }else{
+    var g2=new Chess(f.join(" "));
+    g2.moves({square:m.to,verbose:true}).forEach(function(x){if(x.captured)hits.push({to:x.to,p:x.captured});else reach.push(x.to)});
+  }
+  var big=hits.filter(function(h){return VAL[h.p]>=3||h.p==="k"}),T=nm[0].toUpperCase()+nm.slice(1);
+  var text=hits.length?T+" ataca: "+hits.map(function(h){return NM[h.p]+" en "+h.to}).join(", ")+(big.length>=2?" — ¡horquilla!":".")+"":T+" controla "+reach.length+" casillas.";
+  return {from:m.to,reach:reach,hits:hits,text:text};
+}
+function drawArrows(){
+  var s="";
+  if(mode==="b"){
+    if(RI){RI.reach.forEach(function(t){s+=arrow(RI.from,t,"#2f6f9f",.06,.4)});RI.hits.forEach(function(h){s+=arrow(RI.from,h.to,"#d9534f",.1,.85)})}
+    var e=$("live").checked&&evc[fens[ply]];
+    if(e&&e.best&&!game.game_over())s+=arrow(e.best.slice(0,2),e.best.slice(2,4),"#2e9e5b",.12,.9);
+  }
+  $("ar").innerHTML=s;
+}
+$("reach").onchange=render;
+
+/* ---- Importar de Chess.com ---- */
+var ccUser="",ccGames=[],CC="https://api.chess.com/pub/player/";
+function ccRes(p){return p.result==="win"?"Ganaste":(["agreed","repetition","stalemate","insufficient","50move","timevsinsufficient"].indexOf(p.result)>=0?"Tablas":"Perdiste")}
+function ccMine(g){return g.white.username.toLowerCase()===ccUser?"w":"b"}
+async function ccShow(){
+  var out=$("cc-list");if(!ccGames.length)return;
+  var done={};try{(await DB.listGames()).forEach(function(g){if(g.ana&&g.ana.length)done[g.id]=1})}catch(e){}
+  out.innerHTML=ccGames.map(function(g,i){
+    var w=ccMine(g)==="w",me=w?g.white:g.black,op=w?g.black:g.white;
+    return '<button class="cc" data-i="'+i+'">'+new Date(g.end_time*1000).toLocaleDateString("es")+" · "+(w?"⚪":"⚫")+" vs "+op.username+" ("+op.rating+") · "+ccRes(me)+" · "+g.time_class+(done["cc:"+g.url]?" ✓ analizada":"")+"</button>";
+  }).join("");
+}
+$("cc-user").addEventListener("input",function(){lsSet("ccu",this.value.trim())});
+$("cc-go").onclick=async function(){
+  var u=$("cc-user").value.trim().toLowerCase(),out=$("cc-list");
+  if(!u){out.textContent="Escribe tu usuario.";return}
+  out.textContent="Buscando partidas…";
+  try{
+    var ra=await fetch(CC+encodeURIComponent(u)+"/games/archives");
+    if(ra.status===404){out.textContent="No encontré ese usuario en Chess.com.";return}
+    var arch=(await ra.json()).archives||[],games=[];
+    for(var i=arch.length-1;i>=Math.max(0,arch.length-2);i--){var rg=await fetch(arch[i]);games=games.concat((await rg.json()).games||[])}
+    games=games.filter(function(g){return g.pgn&&g.rules==="chess"}).sort(function(a,b){return b.end_time-a.end_time}).slice(0,25);
+    if(!games.length){out.textContent="No hay partidas recientes.";return}
+    ccUser=u;ccGames=games;
+    lsSet("ccu",u);
+    var g0=games[0];DB.updateProfile({username:u,elo:(ccMine(g0)==="w"?g0.white:g0.black).rating}).catch(function(){});
+    DB.kvSet("ccgames",{user:u,games:games}).catch(function(){});
+    ccShow();
+  }catch(e){out.textContent="No se pudo conectar con Chess.com. Revisa tu internet."}
+};
+$("cc-list").addEventListener("click",async function(e){
+  var b=e.target.closest(".cc");if(!b||busy)return;
+  var g=ccGames[+b.dataset.i],me=ccMine(g),r;
+  try{r=parsePgn(g.pgn)}catch(x){r={ms:[]}}
+  if(!r.ms.length){$("sum").textContent="No se pudo leer esa partida.";return}
+  var sv=null;try{sv=await DB.getGame("cc:"+g.url)}catch(x){}
+  if(mode!=="b")setMode("b");
+  var mine=me==="w"?g.white:g.black,opp=me==="w"?g.black:g.white,had=!!(sv&&sv.ana&&sv.ana.length===r.ms.length);
+  moves=r.ms;fens=r.fs;ana=had?sv.ana:[];ply=0;$("me").value=me;flipped=me==="b";
+  curMeta={url:g.url,opponent:opp.username,result:ccRes(mine),timeClass:g.time_class,rating:mine.rating,date:g.end_time*1000};
+  $("sum").textContent="Partida cargada vs "+opp.username+" ("+ccRes(mine)+"). "+(had?"Ya estaba analizada: se cargó tu análisis guardado.":"Pulsa Analizar partida.");
+  sync();window.scrollTo(0,0);
+});
+$("cc-user").value=lsGet("ccu")||"";
+DB.getProfile().then(function(p){if(p.username&&!$("cc-user").value)$("cc-user").value=p.username}).catch(function(){});
+DB.kvGet("ccgames").then(function(v){if(v&&v.games&&v.games.length){ccGames=v.games;ccUser=v.user;if(!$("cc-user").value)$("cc-user").value=v.user;ccShow()}}).catch(function(){});
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+
+/* ---- Historial y evolución ---- */
+var histGames=[];
+function histChart(pts){
+  if(pts.length<2)return '<p class="hp">Se necesitan al menos 2 partidas de Chess.com analizadas para ver tu evolución.</p>';
+  var v=pts.map(function(p){return p.meta.rating}),mn=Math.min.apply(null,v),mx=Math.max.apply(null,v),rg=Math.max(mx-mn,10);
+  var P=pts.map(function(p,i){return [10+i/(pts.length-1)*280,100-(p.meta.rating-mn)/rg*80]});
+  return '<svg viewBox="0 0 300 120" width="100%" role="img" aria-label="Evolución de tu rating"><polyline fill="none" stroke="var(--accent)" stroke-width="2" points="'+P.map(function(q){return q[0].toFixed(1)+","+q[1].toFixed(1)}).join(" ")+'"/>'+P.map(function(q){return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="2.5" fill="var(--accent)"/>'}).join("")+'<text x="10" y="11" font-size="10" fill="var(--muted)">máx '+mx+'</text><text x="10" y="116" font-size="10" fill="var(--muted)">mín '+mn+'</text><text x="290" y="116" font-size="10" text-anchor="end" fill="var(--muted)">último '+v[v.length-1]+'</text></svg>';
+}
+async function histRender(){
+  var el=$("v-hist");el.innerHTML='<p class="hp">Cargando…</p>';
+  var gs=[];try{gs=await DB.listGames()}catch(e){}
+  var nall=gs.length;gs=gs.filter(function(g){return g.ana&&g.ana.length});histGames=gs;
+  if(!gs.length){el.innerHTML='<p class="hp">'+(nall?'Hay '+nall+' partida(s) guardada(s) pero ninguna con análisis.':'Aún no hay partidas analizadas. Analiza una en la pestaña Tablero y aparecerá aquí.')+'</p>';return}
+  var GOOD={best:1,exc:1,good:1,book:1,bril:1},tot={},ph={o:0,m:0,e:0},pc={},wdl={w:0,d:0,l:0},nm=0,ok=0,nerr=0,tcs={},opens={},hasRes=false;
+  var PN={P:"los peones",N:"el caballo",B:"el alfil",R:"la torre",Q:"la dama",K:"el rey"},PHN={o:"la apertura",m:"el medio juego",e:"el final"};
+  gs.forEach(function(g){
+    var st=((g.startFen||START).split(" ")[1]==="w"),n=0,k=0;
+    g.ana.forEach(function(a,i){
+      if(((st===(i%2===0))?"w":"b")!==g.me)return;
+      n++;tot[a.k]=(tot[a.k]||0)+1;if(GOOD[a.k])k++;
+      if(a.k==="err"||a.k==="blun"){nerr++;ph[i<20?"o":i<60?"m":"e"]++;var s=g.sans[i]||"",p=/^[NBRQK]/.test(s)?s[0]:"P";pc[p]=(pc[p]||0)+1}
+    });
+    nm+=n;ok+=k;g._acc=n?Math.round(k/n*100):0;
+    var r=g.meta&&g.meta.result;
+    if(r==="Ganaste"){wdl.w++;hasRes=true}else if(r==="Tablas"){wdl.d++;hasRes=true}else if(r==="Perdiste"){wdl.l++;hasRes=true}
+    if(g.meta&&g.meta.rating)tcs[g.meta.timeClass]=(tcs[g.meta.timeClass]||0)+1;
+    var key=g.sans.slice(0,4).join(" ");opens[key]=opens[key]||{n:0,w:0};opens[key].n++;if(r==="Ganaste")opens[key].w++;
+  });
+  var rs={total:0,solid:0,due:0};try{rs=await DB.statsRevancha()}catch(e){}
+  var html='<div class="hc"><h2>Resumen</h2><div class="big"><div><b>'+gs.length+'</b><span>partidas analizadas</span></div><div><b>'+(nm?Math.round(ok/nm*100):0)+'%</b><span>jugadas sólidas</span></div><div><b>'+(hasRes?wdl.w+"-"+wdl.d+"-"+wdl.l:"–")+'</b><span>G-T-P</span></div></div>'
+    +'<p class="hp" style="margin:8px 0 0">«Sólidas» = mejor, excelente, buena, brillante o de apertura. Es una medida aproximada, no la precisión de Chess.com. Revancha: '+rs.total+' posiciones guardadas, '+rs.solid+' dominadas.</p></div>';
+  html+='<div class="hc"><h2>Tus jugadas</h2>'+Object.keys(LAB).filter(function(k){return tot[k]}).map(function(k){
+    return '<div class="brow '+LAB[k][1]+'"><span>'+LAB[k][0]+'</span><span class="bar" style="width:'+Math.max(2,tot[k]/nm*100).toFixed(0)+'%"></span><span>'+tot[k]+'</span></div>'}).join("")+'</div>';
+  var top=function(o){return Object.keys(o).sort(function(a,b){return o[b]-o[a]})[0]};
+  html+='<div class="hc"><h2>Dónde fallas</h2>'+(nerr<3?'<p class="hp" style="margin:0">Aún hay pocos errores para encontrar patrones. Analiza más partidas.</p>':
+    '<p style="margin:0">De tus <b>'+nerr+'</b> errores y errores graves, el <b>'+Math.round(ph[top(ph)]/nerr*100)+'%</b> fue en <b>'+PHN[top(ph)]+'</b>, y el <b>'+Math.round(pc[top(pc)]/nerr*100)+'%</b> al mover <b>'+PN[top(pc)]+'</b>.</p>')+'</div>';
+  var tc=top(tcs),pts=gs.filter(function(g){return g.meta&&g.meta.rating&&g.meta.timeClass===tc}).sort(function(a,b){return a.meta.date-b.meta.date});
+  html+='<div class="hc"><h2>Evolución'+(tc?" ("+tc+")":"")+'</h2>'+histChart(pts)+'</div>';
+  var ops=Object.keys(opens).sort(function(a,b){return opens[b].n-opens[a].n}).slice(0,3);
+  html+='<div class="hc"><h2>Primeras jugadas más repetidas</h2>'+ops.map(function(o){return '<div class="brow" style="grid-template-columns:1fr auto"><span>'+o+'</span><span>'+opens[o].n+' partida(s), '+opens[o].w+' ganada(s)</span></div>'}).join("")+'</div>';
+  html+='<div class="hc"><h2>Partidas recientes</h2>'+gs.slice(0,10).map(function(g,i){
+    var m=g.meta;return '<button class="cc" data-g="'+i+'">'+(m?new Date(m.date).toLocaleDateString("es")+" · vs "+m.opponent+" · "+m.result:"Partida manual")+" · "+g._acc+"% sólidas</button>"}).join("")+'</div>';
+  el.innerHTML=html;
+}
+$("v-hist").addEventListener("click",function(e){
+  var b=e.target.closest(".cc");if(!b)return;
+  var gm=histGames[+b.dataset.g];if(!gm)return;
+  var g=new Chess(gm.startFen||START),ms=[],fs=[g.fen()];
+  for(var i=0;i<gm.sans.length;i++){var m=g.move(gm.sans[i],{sloppy:true});if(!m)break;ms.push(m);fs.push(g.fen())}
+  setMode("b");moves=ms;fens=fs;ana=gm.ana||[];ply=0;curMeta=gm.meta||null;$("me").value=gm.me;flipped=gm.me==="b";
+  $("sum").textContent="Partida abierta desde el historial.";sync();window.scrollTo(0,0);
+});
+
+/* ---- Entrenador IA (Gemini) ---- */
+var GL="https://generativelanguage.googleapis.com/v1beta/",coachHist=[],coachBusy=false;
+function coachName(){return lsGet("cn")||"Maestro"}
+function sysPrompt(){
+  return "Eres "+coachName()+", un maestro de ajedrez veterano, carismático y con mucha vida, que entrena a un alumno principiante al que le tienes cariño de verdad. Quiere subir de nivel y, con los años, llegar a Gran Maestro. "+
+  "Hablas en español latino cercano, con humor y chispa; puedes usar alguna expresión colombiana de vez en cuando, sin exagerar. Suenas como una persona, no como un manual: frases cortas, reacciones naturales (¡Eso sí!, ay, ay, ay…), alguna metáfora del tablero o de la vida, y a veces una pregunta provocadora que lo haga pensar. Nada de listas largas ni de discursos. Un emoji de ajedrez muy de vez en cuando, no más. "+
+  "Reacciona a su momento: la hora del día, su última partida, sus rachas. Eres exigente pero justo: celebras lo que de verdad mejoró, sin halagos vacíos, y si repite un error se lo dices con humor y con firmeza. Llámalo por el nombre que te indiquen. "+
+  "Máximo unas 110 palabras salvo que pida más. Cierra casi siempre con una misión concreta para hoy o con una pregunta. "+
+  "Importante: usa SOLO los datos que te doy sobre sus partidas, errores y la posición; no inventes jugadas, variantes ni estadísticas. Si no hay evaluación del motor para la posición, no la valores y sugiérele activar el análisis en vivo.";
+}
+var DAYQ="Dame mi mensaje de entrenador de hoy: un saludo con personalidad según la hora y mis últimos resultados, cómo voy, UNA sola cosa para entrenar hoy (si tengo posiciones de Revancha pendientes, empújame a hacerlas) y una pregunta para mí.",greetTried=false;
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
+function fmt(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/^\* /gm,"• ").replace(/\n/g,"<br>")}
+function addMsg(c,t){var d=document.createElement("div");d.className="msg "+c;setA(d,t,c);$("chat").appendChild(d);$("chat").scrollTop=$("chat").scrollHeight;return d}
+function setA(d,t,c){d.innerHTML=((c||"a")==="a"?'<small style="opacity:.6">♞ '+coachName()+'</small><br>':"")+fmt(t)}
+function coachRender(){
+  try{coachHist=JSON.parse(lsGet("cc")||"[]")}catch(e){coachHist=[]}
+  $("chat").innerHTML="";
+  if(!coachHist.length)addMsg("a","Hola, soy tu entrenador. Pega tu clave de Gemini arriba y pulsa «Mensaje del día» para empezar. Mientras más partidas analices, mejor te conozco.");
+  coachHist.forEach(function(m){if(!m.h)addMsg(m.r==="user"?"u":"a",m.t)});
+  if(lsGet("gk")&&!greetTried&&!coachBusy&&lsGet("gday")!==new Date().toDateString()){greetTried=true;coachAsk(DAYQ,true)}
+  $("k-name").value=lsGet("cn")||"";
+  $("k-st").textContent=lsGet("gk")?"Clave guardada en este dispositivo ✓":"Aún no hay clave. Solo se guarda en este teléfono o PC, no en el código.";
+}
+async function coachContext(){
+  var L=[],p={};try{p=await DB.getProfile()}catch(e){}
+  L.push("Hoy es "+new Date().toLocaleDateString("es")+" y para él es de "+(new Date().getHours()<12?"mañana":new Date().getHours()<19?"tarde":"noche")+". Nombre para llamarlo: "+(p.username||"alumno")+". Usuario de Chess.com: "+(p.username||"desconocido")+". Elo aproximado: "+p.elo+". Meta a corto plazo: "+p.goalElo+".");
+  var gs=[];try{gs=(await DB.listGames()).filter(function(g){return g.ana&&g.ana.length})}catch(e){}
+  if(!gs.length)L.push("Todavía no hay partidas analizadas.");
+  else{
+    var GOOD={best:1,exc:1,good:1,book:1,bril:1},nm=0,ok=0,nerr=0,ph={o:0,m:0,e:0},pc={},wdl=[0,0,0],last=[],tcs={};
+    var PHN={o:"la apertura",m:"el medio juego",e:"el final"},PN={P:"peones",N:"caballo",B:"alfil",R:"torre",Q:"dama",K:"rey"};
+    gs.forEach(function(g,gi){
+      var st=((g.startFen||START).split(" ")[1]==="w"),n=0,k=0;
+      g.ana.forEach(function(a,i){
+        if(((st===(i%2===0))?"w":"b")!==g.me)return;
+        n++;if(GOOD[a.k])k++;
+        if(a.k==="err"||a.k==="blun"){nerr++;ph[i<20?"o":i<60?"m":"e"]++;var s=g.sans[i]||"",q=/^[NBRQK]/.test(s)?s[0]:"P";pc[q]=(pc[q]||0)+1}
+      });
+      nm+=n;ok+=k;var r=g.meta&&g.meta.result;
+      if(r==="Ganaste")wdl[0]++;else if(r==="Tablas")wdl[1]++;else if(r==="Perdiste")wdl[2]++;
+      if(g.meta&&g.meta.rating)tcs[g.meta.timeClass]=(tcs[g.meta.timeClass]||0)+1;
+      if(gi<5)last.push((g.meta?"vs "+g.meta.opponent+": "+g.meta.result+" ("+g.meta.timeClass+")":"partida manual")+", "+(n?Math.round(k/n*100):0)+"% jugadas sólidas");
+    });
+    var top=function(o){return Object.keys(o).sort(function(a,b){return o[b]-o[a]})[0]};
+    L.push(gs.length+" partidas analizadas; "+Math.round(ok/Math.max(nm,1)*100)+"% de sus jugadas son sólidas; resultados G-T-P: "+wdl.join("-")+".");
+    if(nerr>=3)L.push("De "+nerr+" errores y errores graves, el "+Math.round(ph[top(ph)]/nerr*100)+"% ocurre en "+PHN[top(ph)]+" y el "+Math.round(pc[top(pc)]/nerr*100)+"% al mover "+PN[top(pc)]+".");
+    L.push("Últimas partidas (más reciente primero): "+last.join(" | "));
+    var tc=top(tcs);
+    if(tc){var pts=gs.filter(function(g){return g.meta&&g.meta.rating&&g.meta.timeClass===tc}).sort(function(a,b){return a.meta.date-b.meta.date});
+      if(pts.length>1)L.push("Rating en "+tc+": de "+pts[0].meta.rating+" a "+pts[pts.length-1].meta.rating+" en las partidas analizadas.")}
+  }
+  try{
+    var all=(await DB.exportAll()).revancha||[],due=all.filter(function(x){return x.due<=Date.now()}).length;
+    var rep=all.filter(function(x){return x.repeats>0}).sort(function(a,b){return b.repeats-a.repeats}).slice(0,3);
+    L.push("Revancha: "+all.length+" posiciones guardadas, "+due+" pendientes hoy."+(rep.length?" Errores repetidos: "+rep.map(function(x){return "jugó "+x.played+" en vez de "+x.best+" ("+(x.repeats+1)+" veces)"}).join("; ")+".":""));
+  }catch(e){}
+  if(fens[ply]){
+    var e=evc[fens[ply]],l="Tablero actual (FEN): "+fens[ply]+".";
+    if(ply>0)l+=" Última jugada: "+moves[ply-1].san+(ana[ply-1]?" ("+LAB[ana[ply-1].k][0]+")":"")+".";
+    if(e)l+=" Evaluación del motor (positivo = ventaja blanca): "+evTxt(e)+(e.best?"; mejor jugada: "+sugSan(fens[ply],e):"")+".";
+    L.push(l);
+  }
+  return L.join("\n");
+}
+function gemCall(model,key,body){return fetch(GL+"models/"+model+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify(body)})}
+async function gemModels(key){
+  try{
+    var r=await fetch(GL+"models?pageSize=200",{headers:{"x-goog-api-key":key}}),j=await r.json();
+    var c=(j.models||[]).filter(function(m){return /flash/.test(m.name)&&!/image|tts|live|audio|thinking|exp|robotics|computer/.test(m.name)&&(m.supportedGenerationMethods||[]).indexOf("generateContent")>=0}).map(function(m){return m.name.replace("models/","")});
+    return c.filter(function(x){return !/lite/.test(x)}).sort().reverse().concat(c.filter(function(x){return /lite/.test(x)}).sort().reverse());
+  }catch(e){return []}
+}
+async function coachAsk(text,hidden){
+  if(coachBusy)return;
+  var key=lsGet("gk");if(!key){$("k-st").textContent="Primero pega tu clave de Gemini y pulsa Guardar.";return}
+  coachBusy=true;if(!hidden)addMsg("u",text);
+  var th=addMsg("a",coachName()+" está pensando…"),out="";
+  try{
+    var body={system_instruction:{parts:[{text:sysPrompt()+"\n\nDATOS ACTUALES:\n"+await coachContext()}]},
+      contents:coachHist.slice(-10).map(function(m){return {role:m.r,parts:[{text:m.t}]}}).concat([{role:"user",parts:[{text:text}]}]),
+      generationConfig:{temperature:.95,maxOutputTokens:1200}};
+    var saved=lsGet("gm"),order=(saved?[saved]:[]).concat((await gemModels(key)).filter(function(x){return x!==saved}));
+    if(!order.length)order=["gemini-2.5-flash","gemini-2.5-flash-lite"];
+    var res=null,j={},used=null;
+    for(var i=0;i<Math.min(order.length,6);i++){
+      res=await gemCall(order[i],key,body);j=await res.json().catch(function(){return {}});
+      if(res.ok){used=order[i];break}
+      if(res.status!==404&&res.status!==429)break;
+    }
+    if(!used){
+      var em=((j.error&&j.error.message)||("error "+res.status)).slice(0,260);
+      out=res.status===429?"Gemini dice que no hay cuota gratuita disponible ahora (probé "+Math.min(order.length,6)+" modelo(s)). Si es por minuto, espera un momento. Detalle: "+em:"No pude hablar con Gemini: "+em;
+      setA(th,out);
+    }else{
+      lsSet("gm",used);
+      out=((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(function(p){return p.text||""}).join("")||"No recibí respuesta (puede que se haya bloqueado). Prueba con otra pregunta.";
+      setA(th,out);
+      coachHist.push({r:"user",t:text,h:hidden?1:0},{r:"model",t:out});coachHist=coachHist.slice(-30);lsSet("cc",JSON.stringify(coachHist));
+      if(text===DAYQ)lsSet("gday",new Date().toDateString());
+    }
+  }catch(e){setA(th,"No pude conectarme. Revisa tu internet.")}
+  coachBusy=false;$("chat").scrollTop=$("chat").scrollHeight;
+}
+$("k-save").onclick=function(){var n=$("k-name").value.trim();if(n)lsSet("cn",n);var v=$("k-in").value.trim();if(v){lsSet("gk",v);lsDel("gm");$("k-in").value=""}coachRender()};
+$("k-del").onclick=function(){lsDel("gk");lsDel("gm");coachRender()};
+$("c-send").onclick=function(){var v=$("c-in").value.trim();if(v){$("c-in").value="";coachAsk(v,false)}};
+$("c-in").addEventListener("keydown",function(e){if(e.key==="Enter")$("c-send").click()});
+$("c-day").onclick=function(){coachAsk(DAYQ,true)};
+$("c-pos").onclick=function(){coachAsk("Explícame la posición actual del tablero y qué debería pensar aquí.",false)};
+$("c-clear").onclick=function(){coachHist=[];lsDel("cc");coachRender()};
+
+/* ---- Revancha ---- */
+function rvCount(){
+  DB.statsRevancha().then(function(s){
+    $("rv-n").textContent=s.due?"("+s.due+")":"";
+    $("rv-stats").textContent=s.total+" posiciones guardadas · "+s.solid+" ya dominadas · "+s.due+" pendientes";
+  }).catch(function(){});
+}
+function setMode(m){
+  mode=m;$("v-board").hidden=m!=="b";$("v-rv").hidden=m!=="r";$("v-hist").hidden=m!=="h";$("v-coach").hidden=m!=="c";$("status").hidden=$("bw").hidden=$("banner").hidden=(m==="h"||m==="c");
+  $("tab-b").classList.toggle("on",m==="b");$("tab-r").classList.toggle("on",m==="r");$("tab-h").classList.toggle("on",m==="h");$("tab-c").classList.toggle("on",m==="c");
+  liveTok++;if(pending)eng.postMessage("stop");sel=null;
+  if(m==="r"){DB.dueRevancha().then(function(l){rvList=l;rvShow()}).catch(function(){rvList=[];rvShow()});rvCount()}
+  else if(m==="h"){rv=null;histRender()}
+  else if(m==="c"){rv=null;coachRender()}
+  else{rv=null;flipped=false;sync()}
+}
+$("tab-b").onclick=function(){if(!busy&&mode!=="b")setMode("b")};
+$("tab-r").onclick=function(){if(!busy&&mode!=="r")setMode("r")};
+$("tab-h").onclick=function(){if(!busy&&mode!=="h")setMode("h")};
+$("tab-c").onclick=function(){if(!busy&&mode!=="c")setMode("c")};
+function rvShow(){
+  $("rv-sol").hidden=false;$("rv-next").hidden=true;
+  var it=rvList[0];
+  if(!it){
+    rv=null;game=new Chess();flipped=false;
+    $("rv-info").textContent="No tienes posiciones pendientes. Analiza partidas para generar nuevas.";
+    $("rv-sol").hidden=true;$("banner").textContent="Todo al día.";render();return;
+  }
+  rv={it:it,tries:0,done:false,last:null};game=new Chess(it.fen);sel=null;flipped=game.turn()==="b";
+  $("rv-info").innerHTML="Aquí jugaste <b>"+it.played+"</b> ("+(it.kind==="blun"?"grave error":"error")+")."+(it.repeats>0?" Ya has cometido este error "+(it.repeats+1)+" veces.":"")+" ¿Cuál era la mejor jugada?";
+  $("banner").textContent="Tu turno: encuentra una jugada mejor.";
+  render();
+}
+function rvClick(n){
+  if(!rv||rv.done||busy)return;
+  var piece=game.get(n);
+  if(sel){
+    if(sel===n){sel=null;return render()}
+    var mv=game.move({from:sel,to:n,promotion:"q"});
+    if(mv){sel=null;return rvCheck(mv)}
+  }
+  sel=(piece&&piece.color===game.turn())?n:null;render();
+}
+async function rvCheck(mv){
+  var it=rv.it,ok=false;
+  if(mv.from+mv.to===it.bestUci.slice(0,4)){rv.last={from:mv.from,to:mv.to};return rvEnd(true,"¡Correcto! <b>"+mv.san+"</b> era la mejor jugada.")}
+  if(mv.san===it.played){game.undo();render();$("banner").textContent="Esa es la jugada que causó el error. Busca otra.";return}
+  if(ready&&!busy){
+    busy=true;$("banner").textContent="Comprobando tu jugada…";
+    var after=game.fen();
+    var e0=evc[it.fen]||(evc[it.fen]=await evOf(it.fen)),e1=evc[after]||(evc[after]=await evOf(after));
+    busy=false;
+    var w=it.fen.split(" ")[1]==="w",b=wp(e0.cp),a=wp(e1.cp);if(!w){b=1-b;a=1-a}
+    ok=(b-a)<=0.05;
+  }
+  if(ok){rv.last={from:mv.from,to:mv.to};return rvEnd(true,"Bien: <b>"+mv.san+"</b> también funciona. La del motor era <b>"+it.best+"</b>.")}
+  rv.tries++;game.undo();render();
+  $("banner").textContent=rv.tries>=2?"Tampoco. Si quieres, mira la solución.":"No es la mejor. Inténtalo otra vez.";
+}
+function rvEnd(ok,msg){
+  var it=rv.it,good=ok&&rv.tries===0;rv.done=true;
+  DB.reviewRevancha(it.id,good).then(rvCount).catch(function(){});
+  rvList.shift();
+  $("banner").innerHTML=msg+(good?" La repasaremos más adelante.":" Volverá pronto para repasarla.");
+  $("rv-sol").hidden=true;$("rv-next").hidden=false;render();
+}
+$("rv-sol").onclick=function(){
+  if(!rv||rv.done||busy)return;
+  var bu=rv.it.bestUci,mv=game.move({from:bu.slice(0,2),to:bu.slice(2,4),promotion:bu[4]});
+  rv.last=mv?{from:mv.from,to:mv.to}:null;
+  rvEnd(false,"La mejor era <b>"+rv.it.best+"</b>. Míralo y recuérdalo.");
+};
+$("rv-next").onclick=rvShow;
+rvCount();
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(function(){});
+  navigator.serviceWorker.addEventListener("controllerchange",function(){try{if(!sessionStorage.getItem("rl")){sessionStorage.setItem("rl","1");location.reload()}}catch(e){}});
+}
+startEngine(0);
+render();
+})();
+</script>
+</body>
+</html>
